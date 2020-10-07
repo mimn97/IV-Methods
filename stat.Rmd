@@ -1,0 +1,115 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r}
+
+setwd("~/Desktop")
+library(readxl)
+library(stargazer)
+library(AER)
+stat <- read_excel("stat.xlsx") # Import Data set 
+
+
+#-------Compare 2SLS with OLS --------------
+
+stat$r_t[1] <- NA
+for (i in 2:33){
+  stat$r_t[i] <- stat$r[i-1] # r_{t-1}
+}
+
+stat$CO_t[1] <- NA
+for (i in 2:33){
+  stat$CO_t[i] <- stat$CO[i-1] # CO_{t-1}
+}
+
+invfunc <- lm(I~Y+r_t, data = stat) # (a) Investment function with OLS
+summary(invfunc)
+
+stat$nx <- stat$Y - stat$CO - stat$I - stat$G
+stat$t <- stat$Y - stat$YD
+
+y <- lm(Y~t+CO_t+r_t+G+nx, data = stat) # (b) Reduced Y with OLS
+summary(y)
+
+y.hat1 <- fitted(y)
+y.hat <- fitted.values(y) # (c)
+
+
+stat$y.hat[1] <- NA
+for (i in 2:33){
+  stat$y.hat[i] <- y.hat[i-1]
+}
+
+invfunc2 <- lm(I~y.hat+r_t, data = stat)
+summary(invfunc2)
+
+invfunc3 <- ivreg(I~Y+r_t|t+CO_t+r_t+G+nx, data = stat)
+summary(invfunc3)
+
+stargazer(invfunc, invfunc2, invfunc3)
+
+#---------BIAS - OLS vs SLS----------------------------#
+
+b_sls <- c()
+for (i in 1:100){
+rs_x <- sample(stat$Y[!is.na(stat$Y)]); rs_x
+rs_y <- sample(stat$I[!is.na(stat$I)]); rs_y
+rs_z <- sample(stat$r_t[!is.na(stat$r_t)]); rs_z
+
+num <- sum((rs_z - mean(rs_z, na.rm = TRUE)) * (rs_y - mean(rs_y, na.rm = TRUE)))
+denom <- sum((rs_z - mean(rs_z, na.rm = TRUE)) * (rs_x - mean(rs_x, na.rm = TRUE)))
+
+beta <- num/denom
+b_sls <- c(b_sls, beta)
+}
+
+b_sls
+
+#hist(b_sls)
+#mean(b_sls)
+
+# x1 -> Y, x2 -> r , y -> I
+
+b_ols <- c()
+for (i in 1:100){
+rs_x1 <- sample(stat$Y[!is.na(stat$Y)]); rs_x1
+rs_x2 <- sample(stat$r_t[!is.na(stat$r_t)]); rs_x2
+rs_y <- sample(stat$I[!is.na(stat$I)]); rs_y
+
+
+num <- sum(rs_x2^2)*sum(rs_x1*rs_y) - (sum(rs_x1*rs_x2))*(sum(rs_x2*rs_y))
+denom <- sum(rs_x1^2)*sum(rs_x2^2) - (sum(rs_x1*rs_x2))^2
+
+beta_ols <- num/denom
+b_ols <- c(b_ols, beta_ols)
+}
+
+#b_ols
+
+#hist(b_ols)
+
+c(mean(b_sls),mean(b_ols))
+
+```
+
+
+```{r}
+hist(b_sls,xlab="Beta coefficients (2SLS)", 
+     main="Sampling distribution of beta using 2SLS (100 samples)", 
+     prob = TRUE)
+lines(density(b_sls), col = "red", lwd = "3")
+
+```
+
+```{r}
+
+hist(b_ols, xlab="Beta coefficients (OLS)", 
+     main="Sampling distribution of beta using OLS (100 samples)", 
+     prob = TRUE )
+lines(density(b_ols), col = "red", lwd = "3")
+
+```
+
+
